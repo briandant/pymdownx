@@ -685,7 +685,8 @@ class MagiclinkZettelPattern(InlineProcessor):
     def handleMatch(self, m, data):
         """Return link optionally without protocol."""
 
-        zettelid = m.group(1)
+        print("Matched: {}".format(data))
+        zettelid = m.group(2)
 
         docs_content = os.walk(DOCS_DIR)
 
@@ -693,15 +694,30 @@ class MagiclinkZettelPattern(InlineProcessor):
             if i == 0:
                 filenames = f[2]
 
-        filename = [n for n in filenames if zettelid in n][0]
+#        filename = [n for n in filenames if zettelid in n][0]
+#        pattern = re.compile(r'(^|\W+){}[a-zA-Z0-9-_]*.md'.format(zettelid))
+#        filenames = ' '.join(filenames)
+#        match = re.match(pattern, filenames)
+#        if not match:
+#            import pdb; pdb.set_trace()
+
+        def zettelmatch(filename, zettelid):
+            name = filename.split('.')[0]
+            return name.split("--")[0] == zettelid
+
+        filename = [n for n in filenames if zettelmatch(n, zettelid)][0]
+#        filename = match.group(2)
+#        if 'MAX05' in zettelid:
+#            import pdb; pdb.set_trace()
 
         from pathlib import Path
 
         fullpath = Path(DOCS_DIR) / filename
+        title = "[No title]"
         with open(fullpath, 'r') as f:
             for line in f.readlines():
                 if line.startswith('title: '):
-                    title = line.split(':')[1:][0].strip()
+                    title = line.split('title:')[1].strip()
 
         el = etree.Element("a")
         el.set('href', self.unescape(filename))
@@ -943,8 +959,9 @@ class MagiclinkExtension(Extension):
 
     def setup_zettellinks(self, md, config):
 
-        zettellink_pattern = MagiclinkZettelPattern(r'^zet:(?P<zetid>[a-zA-Z0-9-]{2,50})', md)
-        zettellink_pattern_config = config
+        pattern = r'(^|\W)zet:(?P<zetid>[a-zA-Z0-9-]{2,50})$'
+        zettellink_pattern = MagiclinkZettelPattern(pattern, md)
+        zettellink_pattern.config = config
         md.inlinePatterns.register(zettellink_pattern, "zettellink", 80)
 
     def setup_shorthand(self, md, int_mentions, ext_mentions, config):
