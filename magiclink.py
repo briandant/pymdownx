@@ -28,6 +28,7 @@ from markdown.treeprocessors import Treeprocessor
 from markdown import util as md_util
 import xml.etree.ElementTree as etree
 from . import util
+import os
 import re
 from markdown.inlinepatterns import LinkInlineProcessor, InlineProcessor
 
@@ -676,6 +677,45 @@ class MagiclinkAutoPattern(InlineProcessor):
 
         return el, m.start(0), m.end(0)
 
+DOCS_DIR = '/Users/chaz/.pyenv/versions/3.8.1/envs/research/src/mkdocs-material/docs/'
+
+class MagiclinkZettelPattern(InlineProcessor):
+    """Return a link Element given an auto link `<http://example/com>`."""
+
+    def handleMatch(self, m, data):
+        """Return link optionally without protocol."""
+
+        zettelid = m.group(1)
+
+        docs_content = os.walk(DOCS_DIR)
+
+        for i, f in enumerate(docs_content):
+            if i == 0:
+                filenames = f[2]
+
+        filename = [n for n in filenames if zettelid in n][0]
+
+        from pathlib import Path
+
+        fullpath = Path(DOCS_DIR) / filename
+        with open(fullpath, 'r') as f:
+            for line in f.readlines():
+                if line.startswith('title: '):
+                    title = line.split(':')[1:][0].strip()
+
+        el = etree.Element("a")
+        el.set('href', self.unescape(filename))
+        el.set('class', "zettel-link")
+        el.text = md_util.AtomicString('§{}: {}'.format(zettelid, title))
+
+#        if self.config['hide_protocol']:
+#            el.text = md_util.AtomicString(el.text[el.text.find("://") + 3:])
+
+#        if self.config.get('repo_url_shortener', False):
+#            el.set('magiclink', str(MAGIC_AUTO_LINK))
+
+        return el, m.start(0), m.end(0)
+
 
 class MagiclinkMailPattern(InlineProcessor):
     """Convert emails to clickable email links."""
@@ -891,15 +931,21 @@ class MagiclinkExtension(Extension):
         """Setup auto links."""
 
         # Setup general link patterns
-        auto_link_pattern = MagiclinkAutoPattern(RE_AUTOLINK, md)
-        auto_link_pattern.config = config
-        md.inlinePatterns.register(auto_link_pattern, "autolink", 120)
+#         auto_link_pattern = MagiclinkAutoPattern(RE_AUTOLINK, md)
+#        auto_link_pattern.config = config
+#        md.inlinePatterns.register(auto_link_pattern, "autolink", 120)
 
-        link_pattern = MagiclinkPattern(RE_LINK, md)
-        link_pattern.config = config
-        md.inlinePatterns.register(link_pattern, "magic-link", 85)
+#        link_pattern = MagiclinkPattern(RE_LINK, md)
+#        link_pattern.config = config
+#        md.inlinePatterns.register(link_pattern, "magic-link", 85)
 
-        md.inlinePatterns.register(MagiclinkMailPattern(RE_MAIL, md), "magic-mail", 84.9)
+#        md.inlinePatterns.register(MagiclinkMailPattern(RE_MAIL, md), "magic-mail", 84.9)
+
+    def setup_zettellinks(self, md, config):
+
+        zettellink_pattern = MagiclinkZettelPattern(r'^zet:(?P<zetid>[a-zA-Z0-9-]{2,50})', md)
+        zettellink_pattern_config = config
+        md.inlinePatterns.register(zettellink_pattern, "zettellink", 80)
 
     def setup_shorthand(self, md, int_mentions, ext_mentions, config):
         """Setup shorthand."""
@@ -978,47 +1024,7 @@ class MagiclinkExtension(Extension):
 
         config = self.getConfigs()
 
-        import pdb; pdb.set_trace()
-
-        # Setup repo variables
-        self.user = config.get('user', '')
-        self.repo = config.get('repo', '')
-        self.provider = config.get('provider', 'github')
-        self.labels = config.get('labels', {})
-        self.is_social = self.provider in SOCIAL_PROVIDERS
-        self.git_short = config.get('repo_url_shorthand', False)
-        self.social_short = config.get('social_url_shorthand', False)
-        self.repo_shortner = config.get('repo_url_shortener', False)
-        self.social_shortener = config.get('social_url_shortener', False)
-        self.shortener_exclusions = {k: set(v) for k, v in DEFAULT_EXCLUDES.items()}
-        for key, value in config.get('shortener_user_exclude', {}).items():
-            if key in ('github', 'bitbucket', 'gitlab', 'twitter') and isinstance(value, (list, tuple, set)):
-                self.shortener_exclusions[key] = set([x.lower() for x in value])
-
-        # Ensure valid provider
-        if self.provider not in PROVIDER_INFO:
-            self.provider = 'github'
-
-        int_mentions = None
-        ext_mentions = []
-        if self.git_short:
-            ext_mentions.extend([RE_BITBUCKET_EXT_MENTIONS, RE_GITHUB_EXT_MENTIONS, RE_GITLAB_EXT_MENTIONS])
-
-        if self.social_short:
-            ext_mentions.append(RE_TWITTER_EXT_MENTIONS)
-
-        if self.git_short or self.social_short:
-            int_mentions = PROVIDER_INFO[self.provider]['user_pattern']
-
-        self.setup_autolinks(md, config)
-
-        if self.git_short or self.social_short:
-            self.setup_shorthand(md, int_mentions, ext_mentions, config)
-
-        # Setup link post processor for shortening repository links
-        if self.repo_shortner or self.social_shortener:
-            base_url, base_user_url = self.get_base_urls(config)
-            self.setup_shortener(md, base_url, base_user_url, config, self.repo_shortner, self.social_shortener)
+        self.setup_zettellinks(md, config)
 
 
 def makeExtension(*args, **kwargs):
