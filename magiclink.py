@@ -23,7 +23,7 @@ THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABI
 CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
-from markdown import Extension
+from markdown import Extension, Markdown
 from markdown.treeprocessors import Treeprocessor
 from markdown import util as md_util
 import xml.etree.ElementTree as etree
@@ -685,7 +685,6 @@ class MagiclinkZettelPattern(InlineProcessor):
     def handleMatch(self, m, data):
         """Return link optionally without protocol."""
 
-        print("Matched: {}".format(data))
         zettelid = m.group(2)
 
         docs_content = os.walk(DOCS_DIR)
@@ -694,21 +693,11 @@ class MagiclinkZettelPattern(InlineProcessor):
             if i == 0:
                 filenames = f[2]
 
-#        filename = [n for n in filenames if zettelid in n][0]
-#        pattern = re.compile(r'(^|\W+){}[a-zA-Z0-9-_]*.md'.format(zettelid))
-#        filenames = ' '.join(filenames)
-#        match = re.match(pattern, filenames)
-#        if not match:
-#            import pdb; pdb.set_trace()
-
         def zettelmatch(filename, zettelid):
             name = filename.split('.')[0]
             return name.split("--")[0] == zettelid
 
         filename = [n for n in filenames if zettelmatch(n, zettelid)][0]
-#        filename = match.group(2)
-#        if 'MAX05' in zettelid:
-#            import pdb; pdb.set_trace()
 
         from pathlib import Path
 
@@ -719,16 +708,49 @@ class MagiclinkZettelPattern(InlineProcessor):
                 if line.startswith('title: '):
                     title = line.split('title:')[1].strip()
 
-        el = etree.Element("a")
-        el.set('href', self.unescape(filename))
-        el.set('class', "zettel-link")
-        el.text = md_util.AtomicString('§{}: {}'.format(zettelid, title))
+        el = etree.Element("div")
+        el.set('class', "bdZettelLink--container")
 
-#        if self.config['hide_protocol']:
-#            el.text = md_util.AtomicString(el.text[el.text.find("://") + 3:])
+        anchor_container = etree.Element("div")
+        anchor_container.set('class', "bdZettelLink--anchorContainer")
 
-#        if self.config.get('repo_url_shortener', False):
-#            el.set('magiclink', str(MAGIC_AUTO_LINK))
+        anchor = etree.Element("a")
+        anchor.set('href', self.unescape(filename))
+        anchor.set('class', "zettel-link")
+        anchor.text = md_util.AtomicString(' §{}: {}'.format(zettelid, title))
+
+        toggle = etree.Element("small")
+        toggle.set('class', "bdZettelLink--toggle")
+        toggle.text =  md_util.AtomicString('({})'.format('toggle'))
+
+        anchor_container.append(anchor)
+        anchor_container.append(toggle)
+
+        el.append(anchor_container)
+
+        for i, f in enumerate(docs_content):
+            if i == 0:
+                filenames = f[2]
+
+        fullpath = Path(DOCS_DIR) / filename
+
+        with open(fullpath, 'r') as f:
+            contents = f.read()
+            if len(contents) >= 2:
+                try:
+                    body = contents.split("---")[1]
+                except IndexError:
+                    body = contents
+            else:
+                body = contents
+
+        body_div = etree.Element("div")
+        body_div.set('class', "bdZettelLink--body")
+        mdown = Markdown()
+        html = mdown.convert(body)
+        body_div.text = html
+
+        el.append(body_div)
 
         return el, m.start(0), m.end(0)
 
